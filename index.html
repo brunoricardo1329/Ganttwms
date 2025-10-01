@@ -1,6 +1,6 @@
 <!-- Chosen Palette: Casas Bahia (Red, Blue, White) -->
-<!-- Application Structure Plan: A aplicação foi significativamente melhorada com uma timeline totalmente dinâmica e um design visual renovado. A timeline agora é calculada com base nas datas dos projetos, centrando-se no mês atual e expandindo-se automaticamente para acomodar projetos passados e futuros. Foi adicionado um marcador visual para o dia "Hoje". A interface foi redesenhada para ser mais moderna e esteticamente agradável. -->
-<!-- Visualization & Content Choices: A lógica de renderização da timeline foi completamente reescrita. Em vez de uma grelha estática, as datas de início e fim são calculadas dinamicamente com base nos dados, garantindo que todas as informações são sempre visíveis. Um marcador de "Hoje" foi adicionado para contextualização temporal. O design foi aprimorado com ícones nos KPIs, sombras mais suaves, melhores espaçamentos e transições animadas para uma experiência de utilizador mais profissional e polida. A barra de progresso foi corrigida e melhorada com uma animação. A coluna de ações foi fixada para melhorar a usabilidade em timelines extensas. -->
+<!-- Application Structure Plan: A aplicação foi atualizada para incluir uma hierarquia de projetos e sub-tarefas. As linhas de projeto agora são expansíveis para mostrar tarefas secundárias. O layout da timeline foi refeito para suportar colunas fixas ("Projeto" e "Ações"), resolvendo problemas de alinhamento em timelines longas. Foram adicionados campos de "Classificação" and "Equipa Responsável" aos projetos. -->
+<!-- Visualization & Content Choices: A principal mudança visual é a capacidade de expandir/colapsar linhas de projeto para ver sub-tarefas, que são renderizadas com um recuo e barras de progresso coloridas de acordo com o status. Os projetos agora exibem etiquetas (tags) para "Classificação" e "Equipa Responsável". A estrutura do DOM e o CSS da timeline foram refeitos para usar 'position: sticky' nas colunas da esquerda e direita, garantindo que permaneçam visíveis durante o scroll horizontal. A lógica de cálculo da timeline agora também considera as datas das sub-tarefas para se expandir dinamicamente. -->
 <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -41,35 +41,16 @@
         .org-chart .node:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.1); transform: translateY(-2px); }
         #loader { border: 4px solid #f3f3f3; border-radius: 50%; border-top: 4px solid var(--cb-blue); width: 40px; height: 40px; animation: spin 1s linear infinite; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        .today-marker { position: absolute; top: 0; bottom: 0; width: 2px; background-color: var(--cb-red); z-index: 10; opacity: 0.7; }
-        @keyframes progress-animation {
-            0% { background-position: 1rem 0; }
-            100% { background-position: 0 0; }
-        }
+        .today-marker { position: absolute; top: 0; bottom: 0; width: 2px; background-color: var(--cb-red); z-index: 5; opacity: 0.7; }
+        @keyframes progress-animation { 0% { background-position: 1rem 0; } 100% { background-position: 0 0; } }
         .progress-bar-animated {
-            background-image: linear-gradient(
-                45deg,
-                rgba(255, 255, 255, .15) 25%,
-                transparent 25%,
-                transparent 50%,
-                rgba(255, 255, 255, .15) 50%,
-                rgba(255, 255, 255, .15) 75%,
-                transparent 75%,
-                transparent
-            );
+            background-image: linear-gradient(45deg, rgba(255, 255, 255, .15) 25%, transparent 25%, transparent 50%, rgba(255, 255, 255, .15) 50%, rgba(255, 255, 255, .15) 75%, transparent 75%, transparent);
             background-size: 1rem 1rem;
             animation: progress-animation 1s linear infinite;
         }
-        .sticky-actions {
-            position: sticky;
-            right: 0;
-            background: white;
-        }
-        .timeline-header-sticky-actions {
-            position: sticky;
-            right: 0;
-            background: #f9fafb; /* bg-slate-50 */
-        }
+        .expand-icon { cursor: pointer; transition: transform 0.2s; user-select: none; font-family: monospace; font-size: 1.2rem; }
+        .expand-icon.expanded { transform: rotate(90deg); }
+        .subtask-row { background-color: #fafbfd; }
     </style>
 </head>
 <body>
@@ -106,9 +87,7 @@
             </div>
             <button id="add-project-btn" class="bg-cb-red text-white font-bold py-2.5 px-6 rounded-lg hover:opacity-90 transition-all duration-300 shadow-lg shadow-red-500/30 flex items-center gap-2"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>Adicionar Projeto</button>
         </div>
-        <div class="bg-white rounded-xl shadow-lg overflow-x-auto">
-            <div id="timeline-header-container" class="sticky top-0 bg-slate-50 z-20"></div>
-            <div id="timeline-body" class="relative"></div>
+        <div id="timeline-container" class="bg-white rounded-xl shadow-lg overflow-x-auto">
         </div>
         <section class="mt-16">
             <div class="flex justify-between items-center mb-6">
@@ -123,9 +102,42 @@
     </div>
     <!-- Modals -->
     <div id="project-modal" class="modal fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 hidden z-50">
-        <div class="bg-white rounded-lg shadow-xl w-full max-w-lg p-8 max-h-[90vh] overflow-y-auto">
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-2xl p-8 max-h-[90vh] overflow-y-auto">
             <h2 id="modal-title" class="text-2xl font-bold text-cb-blue mb-6"></h2>
-            <form id="project-form"><input type="hidden" id="project-id"><div class="mb-4"><label for="project-name" class="block text-sm font-medium text-slate-600 mb-1">Nome do Projeto</label><input type="text" id="project-name" class="w-full px-4 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-cb-blue outline-none" required></div><div class="grid grid-cols-2 gap-4 mb-4"><div><label for="start-date" class="block text-sm font-medium text-slate-600 mb-1">Início</label><input type="date" id="start-date" class="w-full px-4 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-cb-blue outline-none" required></div><div><label for="end-date" class="block text-sm font-medium text-slate-600 mb-1">Fim</label><input type="date" id="end-date" class="w-full px-4 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-cb-blue outline-none" required></div></div><div class="mb-4"><label for="progress" class="block text-sm font-medium text-slate-600 mb-1">Progresso: <span id="progress-value" class="font-bold text-cb-blue">0%</span></label><input type="range" id="progress" min="0" max="100" class="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer"></div><div class="mb-4"><label for="status" class="block text-sm font-medium text-slate-600 mb-1">Status</label><select id="status" class="w-full px-4 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-cb-blue outline-none"><option>Planejado</option><option>Em Andamento</option><option>Concluído</option><option>Atrasado</option></select></div><div class="mb-6"><label class="block text-sm font-medium text-slate-600 mb-2">Equipa</label><div id="team-selection" class="grid grid-cols-2 sm:grid-cols-3 gap-3 max-h-40 overflow-y-auto p-2 border rounded-md"></div></div><div class="flex justify-end gap-4 pt-4 border-t"><button type="button" id="cancel-btn" class="bg-slate-200 text-slate-800 font-bold py-2 px-5 rounded-lg hover:bg-slate-300 transition-colors">Cancelar</button><button type="submit" class="bg-cb-blue text-white font-bold py-2 px-5 rounded-lg hover:opacity-90 transition-opacity">Salvar</button></div></form>
+            <form id="project-form"><input type="hidden" id="project-id"><div class="mb-4"><label for="project-name" class="block text-sm font-medium text-slate-600 mb-1">Nome do Projeto</label><input type="text" id="project-name" class="w-full px-4 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-cb-blue outline-none" required></div><div class="grid grid-cols-2 gap-4 mb-4"><div><label for="start-date" class="block text-sm font-medium text-slate-600 mb-1">Início</label><input type="date" id="start-date" class="w-full px-4 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-cb-blue outline-none" required></div><div><label for="end-date" class="block text-sm font-medium text-slate-600 mb-1">Fim</label><input type="date" id="end-date" class="w-full px-4 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-cb-blue outline-none" required></div></div><div class="mb-4"><label for="progress" class="block text-sm font-medium text-slate-600 mb-1">Progresso: <span id="progress-value" class="font-bold text-cb-blue">0%</span></label><input type="range" id="progress" min="0" max="100" class="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer"></div><div class="mb-4"><label for="status" class="block text-sm font-medium text-slate-600 mb-1">Status</label><select id="status" class="w-full px-4 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-cb-blue outline-none"><option>Planejado</option><option>Em Andamento</option><option>Concluído</option><option>Atrasado</option></select></div>
+            <div class="grid grid-cols-2 gap-4 mb-6">
+                <div>
+                    <label for="classification" class="block text-sm font-medium text-slate-600 mb-1">Classificação</label>
+                    <select id="classification" class="w-full px-4 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-cb-blue outline-none">
+                        <option>Melhoria</option>
+                        <option>Erro</option>
+                        <option>Nova Funcionalidade</option>
+                        <option>Débito Técnico</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="responsible-team" class="block text-sm font-medium text-slate-600 mb-1">Equipa Responsável</label>
+                    <select id="responsible-team" class="w-full px-4 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-cb-blue outline-none">
+                        <option>Projeto</option>
+                        <option>Tech</option>
+                    </select>
+                </div>
+            </div>
+            <div class="mb-6"><label class="block text-sm font-medium text-slate-600 mb-2">Equipa do Projeto</label><div id="team-selection" class="grid grid-cols-2 sm:grid-cols-3 gap-3 max-h-40 overflow-y-auto p-2 border rounded-md"></div></div>
+            <div class="my-6 border-t pt-4">
+                 <div class="flex justify-between items-center mb-3">
+                    <h3 class="text-lg font-semibold text-slate-700">Sub-tarefas</h3>
+                    <button type="button" id="add-subtask-btn" class="bg-green-600 text-white text-sm font-bold py-1 px-3 rounded-md hover:bg-green-700">+</button>
+                </div>
+                <div id="subtasks-list" class="space-y-2"></div>
+            </div>
+            <div class="flex justify-end gap-4 pt-4 border-t"><button type="button" id="cancel-btn" class="bg-slate-200 text-slate-800 font-bold py-2 px-5 rounded-lg hover:bg-slate-300 transition-colors">Cancelar</button><button type="submit" class="bg-cb-blue text-white font-bold py-2 px-5 rounded-lg hover:opacity-90 transition-opacity">Salvar</button></div></form>
+        </div>
+    </div>
+     <div id="subtask-modal" class="modal fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center p-4 hidden z-50">
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
+            <h2 id="subtask-modal-title" class="text-2xl font-bold text-cb-blue mb-6"></h2>
+            <form id="subtask-form"><input type="hidden" id="subtask-id"><div class="mb-4"><label for="subtask-name" class="block text-sm font-medium text-slate-600 mb-1">Nome da Sub-tarefa</label><input type="text" id="subtask-name" class="w-full px-3 py-2 border border-slate-300 rounded-md" required></div><div class="grid grid-cols-2 gap-4 mb-4"><div><label for="subtask-start-date" class="block text-sm font-medium text-slate-600 mb-1">Início</label><input type="date" id="subtask-start-date" class="w-full px-3 py-2 border border-slate-300 rounded-md" required></div><div><label for="subtask-end-date" class="block text-sm font-medium text-slate-600 mb-1">Fim</label><input type="date" id="subtask-end-date" class="w-full px-3 py-2 border border-slate-300 rounded-md" required></div></div><div class="mb-4"><label for="subtask-status" class="block text-sm font-medium text-slate-600 mb-1">Status</label><select id="subtask-status" class="w-full px-3 py-2 border border-slate-300 rounded-md"><option>A Fazer</option><option>Em Andamento</option><option>Concluído</option></select></div><div class="flex justify-end gap-4"><button type="button" id="cancel-subtask-btn" class="bg-slate-200 text-slate-800 font-bold py-2 px-5 rounded-lg">Cancelar</button><button type="submit" class="bg-green-600 text-white font-bold py-2 px-5 rounded-lg">Salvar Sub-tarefa</button></div></form>
         </div>
     </div>
     <div id="member-modal" class="modal fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 hidden z-50">
@@ -171,13 +183,14 @@
         let projectsData = [];
         let statusChart;
         let timelineStart, timelineEnd, totalTimelineDays;
-        const timelineBody = document.getElementById('timeline-body');
+        const timelineContainer = document.getElementById('timeline-container');
         const filtersContainer = document.getElementById('filters');
         
         const statusStyles = { 
             "Planejado": { text: "text-gray-600", bg: "bg-gray-200" }, 
-            "Em Andamento": { text: "text-blue-600", bg: "bg-blue-200" }, 
-            "Concluído": { text: "text-green-600", bg: "bg-green-200" }, 
+            "A Fazer": { text: "text-gray-600", bg: "bg-gray-200", barColor: "bg-slate-400" },
+            "Em Andamento": { text: "text-blue-600", bg: "bg-blue-200", barColor: "bg-blue-500" }, 
+            "Concluído": { text: "text-green-600", bg: "bg-green-200", barColor: "bg-green-500" }, 
             "Atrasado": { text: "text-red-600", bg: "bg-red-200" } 
         };
 
@@ -192,9 +205,8 @@
 
         function refreshUI() { 
             calculateTimelineDates();
-            renderTimelineHeader();
-            updateDashboard(); 
             renderTimeline(); 
+            updateDashboard(); 
             renderOrgChart(); 
         };
         
@@ -237,12 +249,12 @@
             let maxDate = new Date(today.getFullYear(), today.getMonth() + 4, 0);
 
             if (projectsData.length > 0) {
-                const allDates = projectsData.flatMap(p => [new Date(p.startDate), new Date(p.endDate)]);
+                const allDates = projectsData.flatMap(p => [new Date(p.startDate), new Date(p.endDate), ...(p.subtasks || []).flatMap(st => [new Date(st.startDate), new Date(st.endDate)]) ]);
                 const earliestDate = new Date(Math.min.apply(null, allDates.filter(d => !isNaN(d))));
                 const latestDate = new Date(Math.max.apply(null, allDates.filter(d => !isNaN(d))));
 
-                if (earliestDate < minDate) minDate = earliestDate;
-                if (latestDate > maxDate) maxDate = latestDate;
+                if (!isNaN(earliestDate) && earliestDate < minDate) minDate = earliestDate;
+                if (!isNaN(latestDate) && latestDate > maxDate) maxDate = latestDate;
             }
             
             timelineStart = new Date(minDate.getFullYear(), minDate.getMonth(), 1);
@@ -254,9 +266,12 @@
         const projectForm = document.getElementById('project-form');
         const memberModal = document.getElementById('member-modal');
         const memberForm = document.getElementById('member-form');
+        const subtaskModal = document.getElementById('subtask-modal');
+        const subtaskForm = document.getElementById('subtask-form');
         
         const hideProjectModal = () => projectModal.classList.add('hidden');
         const hideMemberModal = () => memberModal.classList.add('hidden');
+        const hideSubtaskModal = () => subtaskModal.classList.add('hidden');
 
         function showProjectModal(project = null) {
             projectForm.reset();
@@ -275,12 +290,57 @@
                 document.getElementById('progress').value = project.progress;
                 document.getElementById('progress-value').textContent = `${project.progress}%`;
                 document.getElementById('status').value = project.status;
+                document.getElementById('classification').value = project.classification || 'Melhoria';
+                document.getElementById('responsible-team').value = project.responsibleTeam || 'Projeto';
             } else {
                 document.getElementById('modal-title').textContent = 'Adicionar Novo Projeto';
                 document.getElementById('progress').value = 0;
                 document.getElementById('progress-value').textContent = `0%`;
             }
+             renderSubtasksList(project ? project.id : null, project ? project.subtasks : []);
             projectModal.classList.remove('hidden');
+        };
+
+        function renderSubtasksList(projectId, subtasks = []) {
+            const listContainer = document.getElementById('subtasks-list');
+            listContainer.innerHTML = '';
+            if (!projectId) {
+                listContainer.innerHTML = `<p class="text-sm text-slate-500 text-center">Salve o projeto para poder adicionar sub-tarefas.</p>`;
+                document.getElementById('add-subtask-btn').classList.add('hidden');
+                return;
+            }
+            document.getElementById('add-subtask-btn').classList.remove('hidden');
+            
+            if (subtasks.length === 0) {
+                 listContainer.innerHTML = `<p class="text-sm text-slate-500 text-center">Nenhuma sub-tarefa adicionada.</p>`;
+            } else {
+                subtasks.forEach((subtask, index) => {
+                    listContainer.innerHTML += `
+                        <div class="flex items-center justify-between p-2 rounded-md bg-slate-50">
+                            <span class="text-sm">${subtask.name} (${subtask.status})</span>
+                            <div>
+                                <button type="button" class="edit-subtask-btn p-1 text-slate-500 hover:text-cb-blue" data-index="${index}">✏️</button>
+                                <button type="button" class="delete-subtask-btn p-1 text-slate-500 hover:text-cb-red" data-index="${index}">🗑️</button>
+                            </div>
+                        </div>
+                    `;
+                });
+            }
+        }
+
+        function showSubtaskModal(projectId, subtask = null, subtaskIndex = -1) {
+            subtaskForm.reset();
+            document.getElementById('subtask-id').value = subtaskIndex;
+            if(subtask) {
+                 document.getElementById('subtask-modal-title').textContent = 'Editar Sub-tarefa';
+                 document.getElementById('subtask-name').value = subtask.name;
+                 document.getElementById('subtask-start-date').value = subtask.startDate;
+                 document.getElementById('subtask-end-date').value = subtask.endDate;
+                 document.getElementById('subtask-status').value = subtask.status;
+            } else {
+                 document.getElementById('subtask-modal-title').textContent = 'Adicionar Sub-tarefa';
+            }
+            subtaskModal.classList.remove('hidden');
         };
 
         function showConfirm(title, message) {
@@ -288,8 +348,6 @@
                 const confirmModal = document.getElementById('confirm-modal');
                 document.getElementById('confirm-title').textContent = title;
                 document.getElementById('confirm-message').textContent = message;
-                document.getElementById('confirm-cancel-btn').classList.remove('hidden');
-                document.getElementById('confirm-ok-btn').textContent = 'Confirmar';
                 confirmModal.classList.remove('hidden');
                 const okBtn = document.getElementById('confirm-ok-btn');
                 const cancelBtn = document.getElementById('confirm-cancel-btn');
@@ -353,16 +411,83 @@
             e.preventDefault(); showLoader();
             const id = document.getElementById('project-id').value;
             const projectData = {
-                name: document.getElementById('project-name').value, startDate: document.getElementById('start-date').value,
-                endDate: document.getElementById('end-date').value, progress: parseInt(document.getElementById('progress').value),
+                name: document.getElementById('project-name').value, 
+                startDate: document.getElementById('start-date').value,
+                endDate: document.getElementById('end-date').value, 
+                progress: parseInt(document.getElementById('progress').value),
                 status: document.getElementById('status').value, 
+                classification: document.getElementById('classification').value,
+                responsibleTeam: document.getElementById('responsible-team').value,
                 team: Array.from(document.querySelectorAll('.team-member-checkbox:checked')).map(cb => cb.value)
             };
+            if(id) {
+                const existing = projectsData.find(p => p.id === id);
+                projectData.subtasks = existing.subtasks || [];
+            } else {
+                projectData.subtasks = [];
+            }
             try {
                 if (id) { await updateDoc(doc(db, "projects", id), projectData); } 
                 else { await addDoc(collection(db, "projects"), projectData); }
             } catch (error) { console.error("Erro ao salvar projeto:", error); }
             hideProjectModal(); hideLoader();
+        });
+        
+        subtaskForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            showLoader();
+            const projectId = document.getElementById('project-id').value;
+            const subtaskIndex = parseInt(document.getElementById('subtask-id').value);
+            
+            const project = projectsData.find(p => p.id === projectId);
+            if (!project) { hideLoader(); return; }
+
+            const newSubtask = {
+                name: document.getElementById('subtask-name').value,
+                startDate: document.getElementById('subtask-start-date').value,
+                endDate: document.getElementById('subtask-end-date').value,
+                status: document.getElementById('subtask-status').value
+            };
+            
+            const updatedSubtasks = [...(project.subtasks || [])];
+            if (subtaskIndex > -1) {
+                updatedSubtasks[subtaskIndex] = newSubtask;
+            } else {
+                updatedSubtasks.push(newSubtask);
+            }
+            
+            try {
+                await updateDoc(doc(db, "projects", projectId), { subtasks: updatedSubtasks });
+                renderSubtasksList(projectId, updatedSubtasks);
+            } catch(error) { console.error("Error saving subtask:", error); }
+            hideSubtaskModal();
+            hideLoader();
+        });
+
+        document.getElementById('project-modal').addEventListener('click', async (e) => {
+            const projectId = document.getElementById('project-id').value;
+            if(!projectId) return;
+            const project = projectsData.find(p => p.id === projectId);
+            if (!project) return;
+
+            if (e.target.closest('#add-subtask-btn')) {
+                showSubtaskModal(projectId, null, -1);
+            }
+            if (e.target.closest('.edit-subtask-btn')) {
+                const index = e.target.closest('.edit-subtask-btn').dataset.index;
+                showSubtaskModal(projectId, project.subtasks[index], index);
+            }
+            if (e.target.closest('.delete-subtask-btn')) {
+                const index = e.target.closest('.delete-subtask-btn').dataset.index;
+                const confirmed = await showConfirm('Confirmar Eliminação', 'Tem a certeza que deseja eliminar esta sub-tarefa?');
+                if (confirmed) {
+                    showLoader();
+                    const updatedSubtasks = project.subtasks.filter((_, i) => i != index);
+                    await updateDoc(doc(db, "projects", projectId), { subtasks: updatedSubtasks });
+                    renderSubtasksList(projectId, updatedSubtasks);
+                    hideLoader();
+                }
+            }
         });
 
         function updateDashboard() {
@@ -384,9 +509,9 @@
             statusChart = new Chart(ctx, { type: 'doughnut', data: chartData, options: { responsive: true, maintainAspectRatio: false, cutout: '80%', plugins: { legend: { display: false } } } });
         };
 
-        function renderTimelineHeader() {
-            const container = document.getElementById('timeline-header-container');
+        function renderTimeline() {
             if (!timelineStart) return;
+            const filter = document.querySelector('.filter-btn.active').dataset.status;
             
             const months = [];
             let currentDate = new Date(timelineStart);
@@ -394,37 +519,30 @@
                 months.push(new Date(currentDate));
                 currentDate.setMonth(currentDate.getMonth() + 1);
             }
-
             const monthHeaders = months.map(date => {
                 const monthName = date.toLocaleString('pt-BR', { month: 'short' }).replace('.', '').toUpperCase();
                 const year = date.getFullYear().toString().slice(-2);
                 return `<div class="text-center font-bold text-slate-600 p-2 border-r">${monthName}/${year}</div>`;
             }).join('');
             
-            container.innerHTML = `
-                <div class="grid p-4 border-b bg-slate-100 font-bold text-slate-600 text-sm tracking-wider" style="grid-template-columns: minmax(250px, 1fr) 3fr;">
-                    <div>PROJETO</div>
-                    <div class="grid" style="grid-template-columns: repeat(${months.length}, 1fr);">${monthHeaders}</div>
-                    <div class="text-center timeline-header-sticky-actions border-l">AÇÕES</div>
+            let tableHTML = `
+                <div class="sticky top-0 bg-slate-100 z-10 grid" style="grid-template-columns: minmax(300px, 1fr) 3fr minmax(100px, auto);">
+                    <div class="p-4 font-bold text-slate-600 text-sm tracking-wider border-b sticky left-0 bg-slate-100 z-10">PROJETO</div>
+                    <div class="grid border-l border-b" style="grid-template-columns: repeat(${months.length}, 1fr);">${monthHeaders}</div>
+                    <div class="p-4 font-bold text-slate-600 text-sm tracking-wider text-center border-b border-l sticky right-0 bg-slate-100 z-10">AÇÕES</div>
                 </div>
             `;
-             // Adjust column definitions to match the number of columns
-            const headerGrid = container.querySelector('.grid');
-            headerGrid.style.gridTemplateColumns = 'minmax(250px, 1fr) 3fr auto';
-        };
 
-        function renderTimeline() {
-            const filter = document.querySelector('.filter-btn.active').dataset.status;
-            timelineBody.innerHTML = '';
             const filteredProjects = filter === "Todos" ? projectsData : projectsData.filter(p => p.status === filter);
             
             if (filteredProjects.length === 0) {
-                timelineBody.innerHTML = `<div class="text-center p-8 text-slate-500">Nenhum projeto encontrado.</div>`;
+                tableHTML += `<div class="text-center p-8 text-slate-500 col-span-3">Nenhum projeto encontrado.</div>`;
             } else {
                 filteredProjects.forEach(project => {
-                    timelineBody.appendChild(createProjectRow(project));
+                    tableHTML += createProjectRow(project, months.length);
                 });
             }
+            timelineContainer.innerHTML = tableHTML;
 
             const today = new Date();
             if (today >= timelineStart && today <= timelineEnd) {
@@ -433,23 +551,26 @@
 
                 const marker = document.createElement('div');
                 marker.className = 'today-marker';
+                marker.style.left = `${todayLeftPercentage}%`;
                 
-                // Calculate position relative to the main timeline body
-                const timelineBodyWidth = timelineBody.querySelector('.timeline-grid-area')?.offsetWidth || 1;
-                const projectColWidth = timelineBody.querySelector('.project-col-area')?.offsetWidth || 1;
-                
-                marker.style.left = `calc(${projectColWidth}px + ${todayLeftPercentage * timelineBodyWidth / 100}px)`;
-
-                timelineBody.appendChild(marker);
+                const timelineGrids = timelineContainer.querySelectorAll('.timeline-grid-area');
+                timelineGrids.forEach(grid => {
+                    const clonedMarker = marker.cloneNode();
+                    grid.appendChild(clonedMarker);
+                });
             }
         };
 
-        function createProjectRow(project) {
+        function createProjectRow(project, monthCount) {
              const teamHTML = (project.team || []).map(memberId => {
                 const member = teamMembers.find(m => m.id === memberId);
                 return member ? `<img class="inline-block h-8 w-8 rounded-full ring-2 ring-white object-cover" src="${member.photo}" alt="${member.name}" title="${member.name}">` : '';
             }).join('');
             
+            const classificationTag = project.classification ? `<span class="text-xs font-semibold py-0.5 px-2 rounded-full bg-purple-100 text-purple-700 mr-2">${project.classification}</span>` : '';
+            const responsibleTag = project.responsibleTeam ? `<span class="text-xs font-semibold py-0.5 px-2 rounded-full bg-orange-100 text-orange-700">${project.responsibleTeam}</span>` : '';
+
+            const hasSubtasks = project.subtasks && project.subtasks.length > 0;
             const projStart = new Date(project.startDate);
             const projEnd = new Date(project.endDate);
             const startOffsetDays = Math.max(0, (projStart - timelineStart) / (1000 * 60 * 60 * 24));
@@ -458,41 +579,66 @@
             const width = (durationDays / totalTimelineDays) * 100;
             const statusStyle = statusStyles[project.status] || statusStyles["Planejado"];
             
-            const months = [];
-            let currentDate = new Date(timelineStart);
-            while(currentDate <= timelineEnd) {
-                months.push(new Date(currentDate));
-                currentDate.setMonth(currentDate.getMonth() + 1);
-            }
-
-            const projectEl = document.createElement('div');
-            projectEl.className = "grid items-center p-4 border-b hover:bg-slate-50/70 transition-colors duration-200";
-            projectEl.style.gridTemplateColumns = "minmax(250px, 1fr) 3fr auto";
-            
-            projectEl.innerHTML = `
-                <div class="pr-4 project-col-area">
-                    <p class="font-bold text-slate-800">${project.name}</p>
-                    <div class="flex items-center mt-2">
-                        <span class="text-xs font-semibold py-1 px-2.5 rounded-full ${statusStyle.bg} ${statusStyle.text}">${project.status}</span>
-                        <div class="flex items-center -space-x-2 ml-4">${teamHTML}</div>
+            let rowHTML = `
+                <div class="project-row-wrapper border-b">
+                    <div class="grid hover:bg-slate-50/70" style="grid-template-columns: minmax(300px, 1fr) 3fr minmax(100px, auto);">
+                        <div class="p-4 pr-4 flex items-start sticky left-0 bg-white hover:bg-slate-50/70">
+                            <span class="expand-icon mr-2 ${hasSubtasks ? '' : 'invisible'}">></span>
+                            <div>
+                                <p class="font-bold text-slate-800">${project.name}</p>
+                                 <div class="flex items-center mt-1.5 flex-wrap gap-y-1">
+                                    ${classificationTag}
+                                    ${responsibleTag}
+                                </div>
+                                <div class="flex items-center mt-2">
+                                    <span class="text-xs font-semibold py-1 px-2.5 rounded-full ${statusStyle.bg} ${statusStyle.text}">${project.status}</span>
+                                    <div class="flex items-center -space-x-2 ml-4">${teamHTML}</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="h-full relative border-l timeline-grid-area">
+                             <div class="absolute h-8 top-1/2 -translate-y-1/2 rounded-lg bg-slate-200 overflow-hidden" style="left: ${left}%; width: ${width}%; min-width: 2px;">
+                                <div class="h-full rounded-lg bg-cb-blue progress-bar-animated flex items-center" style="width: ${project.progress}%;">
+                                    <span class="text-white text-xs font-bold px-2 whitespace-nowrap">${project.progress}%</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flex justify-center items-center gap-3 p-4 sticky right-0 bg-white hover:bg-slate-50/70 border-l">
+                            <button class="edit-btn action-btn text-slate-500 hover:text-cb-blue transition-colors" data-id="${project.id}">✏️<span class="tooltip">Editar</span></button>
+                            <button class="delete-btn action-btn text-slate-500 hover:text-cb-red transition-colors" data-id="${project.id}">🗑️<span class="tooltip">Eliminar</span></button>
+                        </div>
                     </div>
-                </div>
-                <div class="h-10 relative timeline-grid-area" style="grid-template-columns: repeat(${months.length}, 1fr);">
-                    <div class="absolute h-full w-full">
-                        <div class="absolute h-8 top-1/2 -translate-y-1/2 rounded-lg bg-slate-200 overflow-hidden" style="left: ${left}%; width: ${width}%; min-width: 2px;">
-                            <div class="h-full rounded-lg bg-cb-blue progress-bar-animated flex items-center" style="width: ${project.progress}%;">
-                                <span class="text-white text-xs font-bold px-2 whitespace-nowrap">${project.progress}%</span>
+                </div>`;
+            return rowHTML;
+        };
+
+        function createSubtaskRow(subtask, monthCount) {
+            const subStart = new Date(subtask.startDate);
+            const subEnd = new Date(subtask.endDate);
+            const startOffsetDays = Math.max(0, (subStart - timelineStart) / (1000 * 60 * 60 * 24));
+            const durationDays = Math.max(0, (subEnd - subStart) / (1000 * 60 * 60 * 24));
+            const left = (startOffsetDays / totalTimelineDays) * 100;
+            const width = (durationDays / totalTimelineDays) * 100;
+            const statusStyle = statusStyles[subtask.status] || statusStyles["A Fazer"];
+            const barColor = statusStyle.barColor || 'bg-slate-400';
+
+            return `
+                <div class="subtask-row grid" style="grid-template-columns: minmax(300px, 1fr) 3fr minmax(100px, auto);">
+                    <div class="p-4 pl-10 pr-4 flex items-center sticky left-0 bg-gray-50">
+                        <div>
+                            <p class="text-sm text-slate-700">${subtask.name}</p>
+                            <div class="flex items-center mt-1">
+                                <span class="text-xs font-semibold py-1 px-2.5 rounded-full ${statusStyle.bg} ${statusStyle.text}">${subtask.status}</span>
                             </div>
                         </div>
                     </div>
-                </div>
-                <div class="flex justify-center items-center gap-3 sticky-actions px-4">
-                     <button class="edit-btn action-btn text-slate-500 hover:text-cb-blue transition-colors" data-id="${project.id}">✏️<span class="tooltip">Editar</span></button>
-                     <button class="delete-btn action-btn text-slate-500 hover:text-cb-red transition-colors" data-id="${project.id}">🗑️<span class="tooltip">Eliminar</span></button>
-                 </div>
-            `;
-            return projectEl;
-        };
+                    <div class="h-full relative border-l timeline-grid-area">
+                        <div class="absolute h-4 top-1/2 -translate-y-1/2 rounded-md ${barColor}" style="left: ${left}%; width: ${width}%; min-width: 2px;">
+                        </div>
+                    </div>
+                    <div class="sticky right-0 bg-gray-50 border-l"></div>
+                </div>`;
+        }
         
         const buildHierarchy = (list) => { const tree = []; const mapped = {}; list.forEach(item => { mapped[item.id] = { ...item, children: [] }; }); Object.values(mapped).forEach(item => { if (item.reportsTo && mapped[item.reportsTo]) { mapped[item.reportsTo].children.push(item); } else { tree.push(item); } }); return tree; };
 
@@ -508,21 +654,50 @@
         document.getElementById('cancel-btn').addEventListener('click', hideProjectModal);
         document.getElementById('add-member-btn').addEventListener('click', () => showMemberModal());
         document.getElementById('cancel-member-btn').addEventListener('click', hideMemberModal);
+        document.getElementById('cancel-subtask-btn').addEventListener('click', hideSubtaskModal);
         document.getElementById('progress').addEventListener('input', (e) => { document.getElementById('progress-value').textContent = `${e.target.value}%`; });
 
-        timelineBody.addEventListener('click', async (e) => {
+        timelineContainer.addEventListener('click', async (e) => {
+            const wrapper = e.target.closest('.project-row-wrapper');
+            if (!wrapper) return;
+
             const editBtn = e.target.closest('.edit-btn');
             const deleteBtn = e.target.closest('.delete-btn');
+            const expandIcon = e.target.closest('.expand-icon');
+
             if (editBtn) {
-                const project = projectsData.find(p => p.id == editBtn.dataset.id);
+                const projectId = wrapper.querySelector('.edit-btn').dataset.id;
+                const project = projectsData.find(p => p.id == projectId);
                 showProjectModal(project);
             }
             if (deleteBtn) {
-                const confirmed = await showConfirm('Confirmar Eliminação', 'Tem a certeza de que deseja eliminar este projeto?');
+                const projectId = wrapper.querySelector('.delete-btn').dataset.id;
+                const confirmed = await showConfirm('Confirmar Eliminação', 'Tem a certeza que deseja eliminar este projeto?');
                 if (confirmed) {
                     showLoader();
-                    await deleteDoc(doc(db, "projects", deleteBtn.dataset.id));
+                    await deleteDoc(doc(db, "projects", projectId));
                     hideLoader();
+                }
+            }
+            if(expandIcon && !expandIcon.classList.contains('invisible')) {
+                const projectId = wrapper.querySelector('.edit-btn').dataset.id;
+                const project = projectsData.find(p => p.id === projectId);
+                const subtaskRows = wrapper.querySelectorAll('.subtask-row');
+
+                if (subtaskRows.length > 0) { // Collapse
+                    subtaskRows.forEach(row => row.remove());
+                    expandIcon.classList.remove('expanded');
+                } else if (project.subtasks && project.subtasks.length > 0) { // Expand
+                    const months = [];
+                    let currentDate = new Date(timelineStart);
+                    while(currentDate <= timelineEnd) {
+                        months.push(new Date(currentDate));
+                        currentDate.setMonth(currentDate.getMonth() + 1);
+                    }
+                    project.subtasks.forEach(subtask => {
+                        wrapper.insertAdjacentHTML('beforeend', createSubtaskRow(subtask, months.length));
+                    });
+                    expandIcon.classList.add('expanded');
                 }
             }
         });
@@ -536,7 +711,7 @@
                 if (teamMembers.some(m => m.reportsTo === memberId)) { 
                     alert("Não é possível eliminar um membro com subordinados."); return; 
                 }
-                const confirmed = await showConfirm('Confirmar Eliminação', 'Tem a certeza de que deseja eliminar este membro?');
+                const confirmed = await showConfirm('Confirmar Eliminação', 'Tem a certeza que deseja eliminar este membro?');
                 if (confirmed) {
                     showLoader();
                     await deleteDoc(doc(db, "members", memberId));
