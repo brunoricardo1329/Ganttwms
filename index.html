@@ -1,7 +1,6 @@
 <!-- Chosen Palette: Casas Bahia (Red, Blue, White) -->
-<!-- Application Structure Plan: A aplicação foi atualizada para se integrar com o Firebase. A fonte de dados já não está no código (hardcoded), mas sim no Firestore. A lógica foi reescrita para usar funções assíncronas para ler e escrever dados (CRUD). O upload de imagens foi adicionado ao modal de membros, que agora interage com o Firebase Storage para persistir as fotos. Esta arquitetura transforma a aplicação de um protótipo local para uma aplicação web completa, persistent
-e e pronta para ser usada online por múltiplos utilizadores. -->
-<!-- Visualization & Content Choices: A interface do utilizador permanece a mesma, mas a lógica de backend foi completamente alterada. Em vez de manipular arrays em JavaScript, todas as funções de guardar, editar e eliminar agora comunicam com o Firestore usando a sua biblioteca SDK. Foi adicionado um campo de input de ficheiro para fotos, e a lógica de upload trata de enviar o ficheiro para o Firebase Storage e guardar o URL de download no Firestore, que é a prática recomendada. `onSnapshot` é usado para ouvir alterações nos dados em tempo real, atualizando a interface automaticamente sempre que os dados mudam na nuvem, proporcionando uma experiência colaborativa e dinâmica. -->
+<!-- Application Structure Plan: A aplicação foi significativamente melhorada com uma timeline totalmente dinâmica e um design visual renovado. A timeline agora é calculada com base nas datas dos projetos, centrando-se no mês atual e expandindo-se automaticamente para acomodar projetos passados e futuros. Foi adicionado um marcador visual para o dia "Hoje". A interface foi redesenhada para ser mais moderna e esteticamente agradável. -->
+<!-- Visualization & Content Choices: A lógica de renderização da timeline foi completamente reescrita. Em vez de uma grelha estática, as datas de início e fim são calculadas dinamicamente com base nos dados, garantindo que todas as informações são sempre visíveis. Um marcador de "Hoje" foi adicionado para contextualização temporal. O design foi aprimorado com ícones nos KPIs, sombras mais suaves, melhores espaçamentos e transições animadas para uma experiência de utilizador mais profissional e polida. A barra de progresso foi corrigida e melhorada com uma animação. A coluna de ações foi fixada para melhorar a usabilidade em timelines extensas. -->
 <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -15,7 +14,7 @@ e e pronta para ser usada online por múltiplos utilizadores. -->
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
-        body { font-family: 'Inter', sans-serif; background-color: #f1f5f9; }
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
         :root { --cb-red: #D71921; --cb-blue: #00438F; }
         .bg-cb-blue { background-color: var(--cb-blue); } .bg-cb-red { background-color: var(--cb-red); }
         .text-cb-blue { color: var(--cb-blue); } .text-cb-red { color: var(--cb-red); }
@@ -24,12 +23,12 @@ e e pronta para ser usada online por múltiplos utilizadores. -->
         .chart-container { position: relative; height: 250px; width: 250px; margin: auto; }
         .modal { transition: opacity 0.3s ease; }
         .kpi-card { transition: transform 0.2s ease, box-shadow 0.2s ease; }
-        .kpi-card:hover { transform: translateY(-4px); box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1); }
+        .kpi-card:hover { transform: translateY(-5px); box-shadow: 0 10px 20px -5px rgb(0 0 0 / 0.1); }
         .action-btn { position: relative; display: inline-block; }
         .action-btn .tooltip { visibility: hidden; width: 100px; background-color: #334155; color: #fff; text-align: center; border-radius: 6px; padding: 5px 0; position: absolute; z-index: 1; bottom: 125%; left: 50%; margin-left: -50px; opacity: 0; transition: opacity 0.2s; }
         .action-btn:hover .tooltip { visibility: visible; opacity: 1; }
-        .org-chart { display: flex; justify-content: center; } .org-chart ul { padding-top: 20px; position: relative; transition: all 0.5s; }
-        .org-chart li { float: left; text-align: center; list-style-type: none; position: relative; padding: 20px 5px 0 5px; transition: all 0.5s; }
+        .org-chart { display: inline-block; min-width: 100%; } .org-chart ul { padding-top: 20px; position: relative; transition: all 0.5s; text-align: center; }
+        .org-chart li { display: inline-block; vertical-align: top; text-align: center; list-style-type: none; position: relative; padding: 20px 8px 0 8px; transition: all 0.5s; }
         .org-chart li::before, .org-chart li::after { content: ''; position: absolute; top: 0; right: 50%; border-top: 2px solid #ccc; width: 50%; height: 20px; }
         .org-chart li::after { right: auto; left: 50%; border-left: 2px solid #ccc; }
         .org-chart li:only-child::after, .org-chart li:only-child::before { display: none; }
@@ -38,32 +37,59 @@ e e pronta para ser usada online por múltiplos utilizadores. -->
         .org-chart li:last-child::before { border-right: 2px solid #ccc; border-radius: 0 5px 0 0; }
         .org-chart li:first-child::after { border-radius: 5px 0 0 0; }
         .org-chart ul ul::before { content: ''; position: absolute; top: 0; left: 50%; border-left: 2px solid #ccc; width: 0; height: 20px; }
-        .org-chart .node { border: 1px solid #ccc; padding: 10px; display: inline-block; border-radius: 8px; background-color: white; min-width: 180px; transition: all 0.3s; }
-        .org-chart .node:hover { box-shadow: 0 4px 8px rgba(0,0,0,0.1); transform: translateY(-2px); }
+        .org-chart .node { border: 1px solid #e2e8f0; padding: 12px; display: inline-block; border-radius: 8px; background-color: white; min-width: 180px; transition: all 0.3s; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+        .org-chart .node:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.1); transform: translateY(-2px); }
         #loader { border: 4px solid #f3f3f3; border-radius: 50%; border-top: 4px solid var(--cb-blue); width: 40px; height: 40px; animation: spin 1s linear infinite; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .today-marker { position: absolute; top: 0; bottom: 0; width: 2px; background-color: var(--cb-red); z-index: 10; opacity: 0.7; }
+        @keyframes progress-animation {
+            0% { background-position: 1rem 0; }
+            100% { background-position: 0 0; }
+        }
+        .progress-bar-animated {
+            background-image: linear-gradient(
+                45deg,
+                rgba(255, 255, 255, .15) 25%,
+                transparent 25%,
+                transparent 50%,
+                rgba(255, 255, 255, .15) 50%,
+                rgba(255, 255, 255, .15) 75%,
+                transparent 75%,
+                transparent
+            );
+            background-size: 1rem 1rem;
+            animation: progress-animation 1s linear infinite;
+        }
+        .sticky-actions {
+            position: sticky;
+            right: 0;
+            background: white;
+        }
+        .timeline-header-sticky-actions {
+            position: sticky;
+            right: 0;
+            background: #f9fafb; /* bg-slate-50 */
+        }
     </style>
 </head>
 <body>
     <div id="loader-overlay" class="fixed inset-0 bg-white/80 z-50 flex items-center justify-center">
         <div id="loader"></div>
     </div>
-
     <div id="error-container" class="hidden fixed top-0 left-0 right-0 bg-red-100 border-b-2 border-red-500 text-red-800 p-4 text-center z-50">
         <p><strong class="font-bold">Erro de Ligação:</strong> <span id="error-message"></span></p>
     </div>
-
-    <div class="container mx-auto p-4 md:p-8 pt-16">
-        <header class="text-center mb-10">
-            <h1 class="text-4xl font-extrabold text-cb-blue">Cronograma de Projetos</h1>
-            <p class="text-slate-500 mt-2">Acompanhe o andamento das iniciativas estratégicas.</p>
+    <div class="container mx-auto p-4 md:p-8">
+        <header class="text-center py-6 border-b border-slate-200 mb-10">
+            <h1 class="text-4xl font-extrabold text-cb-blue tracking-tight">Cronograma de Projetos</h1>
+            <p class="text-slate-500 mt-2 text-lg">Acompanhe o andamento das iniciativas estratégicas.</p>
         </header>
-        <section id="dashboard" class="mb-10 grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <section id="dashboard" class="mb-12 grid grid-cols-1 lg:grid-cols-3 gap-8">
             <div class="lg:col-span-2 grid grid-cols-2 md:grid-cols-4 gap-6">
-                <div class="kpi-card bg-white p-5 rounded-xl shadow-md text-center"><h3 class="flex items-center justify-center text-sm font-medium text-slate-500">📊 Total de Projetos</h3><p id="kpi-total" class="text-4xl font-bold text-cb-blue mt-2">0</p></div>
-                <div class="kpi-card bg-white p-5 rounded-xl shadow-md text-center"><h3 class="flex items-center justify-center text-sm font-medium text-slate-500">⏳ Em Andamento</h3><p id="kpi-andamento" class="text-4xl font-bold text-blue-600 mt-2">0</p></div>
-                <div class="kpi-card bg-white p-5 rounded-xl shadow-md text-center"><h3 class="flex items-center justify-center text-sm font-medium text-slate-500">✅ Concluídos</h3><p id="kpi-concluido" class="text-4xl font-bold text-green-600 mt-2">0</p></div>
-                <div class="kpi-card bg-white p-5 rounded-xl shadow-md text-center"><h3 class="flex items-center justify-center text-sm font-medium text-slate-500">⚠️ Atrasados</h3><p id="kpi-atrasado" class="text-4xl font-bold text-cb-red mt-2">0</p></div>
+                <div class="kpi-card bg-white p-5 rounded-xl shadow-md text-center"><h3 class="flex items-center justify-center text-sm font-medium text-slate-500"><span class="mr-2 text-xl">📊</span>Total</h3><p id="kpi-total" class="text-4xl font-bold text-cb-blue mt-2">0</p></div>
+                <div class="kpi-card bg-white p-5 rounded-xl shadow-md text-center"><h3 class="flex items-center justify-center text-sm font-medium text-slate-500"><span class="mr-2 text-xl">⏳</span>Em Andamento</h3><p id="kpi-andamento" class="text-4xl font-bold text-blue-600 mt-2">0</p></div>
+                <div class="kpi-card bg-white p-5 rounded-xl shadow-md text-center"><h3 class="flex items-center justify-center text-sm font-medium text-slate-500"><span class="mr-2 text-xl">✅</span>Concluídos</h3><p id="kpi-concluido" class="text-4xl font-bold text-green-600 mt-2">0</p></div>
+                <div class="kpi-card bg-white p-5 rounded-xl shadow-md text-center"><h3 class="flex items-center justify-center text-sm font-medium text-slate-500"><span class="mr-2 text-xl">⚠️</span>Atrasados</h3><p id="kpi-atrasado" class="text-4xl font-bold text-cb-red mt-2">0</p></div>
             </div>
             <div class="bg-white p-4 rounded-xl shadow-md flex flex-col justify-center">
                 <h3 class="text-center font-semibold text-slate-700 mb-2">Projetos por Status</h3>
@@ -78,38 +104,34 @@ e e pronta para ser usada online por múltiplos utilizadores. -->
                 <button class="filter-btn font-semibold py-2 px-4 rounded-full text-sm transition-all duration-300 bg-white shadow-sm border border-slate-200" data-status="Concluído">Concluído</button>
                 <button class="filter-btn font-semibold py-2 px-4 rounded-full text-sm transition-all duration-300 bg-white shadow-sm border border-slate-200" data-status="Atrasado">Atrasado</button>
             </div>
-            <button id="add-project-btn" class="bg-cb-red text-white font-bold py-2.5 px-6 rounded-lg hover:opacity-90 transition-all duration-300 shadow-lg shadow-red-500/30">Adicionar Projeto</button>
+            <button id="add-project-btn" class="bg-cb-red text-white font-bold py-2.5 px-6 rounded-lg hover:opacity-90 transition-all duration-300 shadow-lg shadow-red-500/30 flex items-center gap-2"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>Adicionar Projeto</button>
         </div>
-        <div class="bg-white rounded-xl shadow-lg overflow-hidden">
-            <div class="grid grid-cols-12 p-4 border-b bg-slate-50 font-bold text-slate-600 text-sm tracking-wider">
-                <div class="col-span-3">PROJETO</div>
-                <div class="col-span-7 grid grid-cols-6 text-center"><span>Jul/25</span><span>Ago/25</span><span>Set/25</span><span>Out/25</span><span>Nov/25</span><span>Dez/25</span></div>
-                <div class="col-span-2 text-center">AÇÕES</div>
-            </div>
-            <div id="timeline-body"></div>
+        <div class="bg-white rounded-xl shadow-lg overflow-x-auto">
+            <div id="timeline-header-container" class="sticky top-0 bg-slate-50 z-20"></div>
+            <div id="timeline-body" class="relative"></div>
         </div>
-        <section class="mt-12">
+        <section class="mt-16">
             <div class="flex justify-between items-center mb-6">
-                <h2 class="text-2xl font-bold text-cb-blue">Organograma da Equipe</h2>
-                <button id="add-member-btn" class="bg-cb-blue text-white font-bold py-2 px-5 rounded-lg hover:opacity-90 transition-opacity">Adicionar Membro</button>
+                <h2 class="text-3xl font-bold text-cb-blue">Organograma da Equipa</h2>
+                <button id="add-member-btn" class="bg-cb-blue text-white font-bold py-2 px-5 rounded-lg hover:opacity-90 transition-opacity flex items-center gap-2"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><line x1="20" y1="8" x2="20" y2="14"></line><line x1="17" y1="11" x2="23" y2="11"></line></svg>Adicionar Membro</button>
             </div>
             <div id="org-chart-container" class="w-full bg-white p-6 rounded-xl shadow-lg overflow-x-auto">
                 <div id="org-chart" class="org-chart"></div>
             </div>
         </section>
-        <footer class="text-center mt-10 text-slate-400 text-sm"><p>© 2025 Gestão de Projetos. Todos os direitos reservados.</p></footer>
+        <footer class="text-center mt-12 text-slate-400 text-sm"><p>© 2025 Gestão de Projetos. Todos os direitos reservados.</p></footer>
     </div>
     <!-- Modals -->
     <div id="project-modal" class="modal fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 hidden z-50">
-        <div class="bg-white rounded-lg shadow-xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-lg p-8 max-h-[90vh] overflow-y-auto">
             <h2 id="modal-title" class="text-2xl font-bold text-cb-blue mb-6"></h2>
-            <form id="project-form"><input type="hidden" id="project-id"><div class="mb-4"><label for="project-name" class="block text-sm font-medium text-slate-600 mb-1">Nome</label><input type="text" id="project-name" class="w-full px-3 py-2 border border-slate-300 rounded-md" required></div><div class="grid grid-cols-2 gap-4 mb-4"><div><label for="start-date" class="block text-sm font-medium text-slate-600 mb-1">Início</label><input type="date" id="start-date" class="w-full px-3 py-2 border border-slate-300 rounded-md" required></div><div><label for="end-date" class="block text-sm font-medium text-slate-600 mb-1">Fim</label><input type="date" id="end-date" class="w-full px-3 py-2 border border-slate-300 rounded-md" required></div></div><div class="mb-4"><label for="progress" class="block text-sm font-medium text-slate-600 mb-1">Progresso: <span id="progress-value" class="font-bold text-cb-blue">0%</span></label><input type="range" id="progress" min="0" max="100" class="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer"></div><div class="mb-4"><label for="status" class="block text-sm font-medium text-slate-600 mb-1">Status</label><select id="status" class="w-full px-3 py-2 border border-slate-300 rounded-md"><option>Planejado</option><option>Em Andamento</option><option>Concluído</option><option>Atrasado</option></select></div><div class="mb-6"><label class="block text-sm font-medium text-slate-600 mb-2">Equipa</label><div id="team-selection" class="grid grid-cols-2 gap-3 max-h-40 overflow-y-auto p-2 border rounded-md"></div></div><div class="flex justify-end gap-4"><button type="button" id="cancel-btn" class="bg-slate-200 text-slate-800 font-bold py-2 px-5 rounded-lg">Cancelar</button><button type="submit" class="bg-cb-blue text-white font-bold py-2 px-5 rounded-lg">Salvar</button></div></form>
+            <form id="project-form"><input type="hidden" id="project-id"><div class="mb-4"><label for="project-name" class="block text-sm font-medium text-slate-600 mb-1">Nome do Projeto</label><input type="text" id="project-name" class="w-full px-4 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-cb-blue outline-none" required></div><div class="grid grid-cols-2 gap-4 mb-4"><div><label for="start-date" class="block text-sm font-medium text-slate-600 mb-1">Início</label><input type="date" id="start-date" class="w-full px-4 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-cb-blue outline-none" required></div><div><label for="end-date" class="block text-sm font-medium text-slate-600 mb-1">Fim</label><input type="date" id="end-date" class="w-full px-4 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-cb-blue outline-none" required></div></div><div class="mb-4"><label for="progress" class="block text-sm font-medium text-slate-600 mb-1">Progresso: <span id="progress-value" class="font-bold text-cb-blue">0%</span></label><input type="range" id="progress" min="0" max="100" class="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer"></div><div class="mb-4"><label for="status" class="block text-sm font-medium text-slate-600 mb-1">Status</label><select id="status" class="w-full px-4 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-cb-blue outline-none"><option>Planejado</option><option>Em Andamento</option><option>Concluído</option><option>Atrasado</option></select></div><div class="mb-6"><label class="block text-sm font-medium text-slate-600 mb-2">Equipa</label><div id="team-selection" class="grid grid-cols-2 sm:grid-cols-3 gap-3 max-h-40 overflow-y-auto p-2 border rounded-md"></div></div><div class="flex justify-end gap-4 pt-4 border-t"><button type="button" id="cancel-btn" class="bg-slate-200 text-slate-800 font-bold py-2 px-5 rounded-lg hover:bg-slate-300 transition-colors">Cancelar</button><button type="submit" class="bg-cb-blue text-white font-bold py-2 px-5 rounded-lg hover:opacity-90 transition-opacity">Salvar</button></div></form>
         </div>
     </div>
     <div id="member-modal" class="modal fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 hidden z-50">
-        <div class="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-md p-8">
             <h2 id="member-modal-title" class="text-2xl font-bold text-cb-blue mb-6"></h2>
-            <form id="member-form"><input type="hidden" id="member-id"><div class="mb-4"><label for="member-name" class="block text-sm font-medium text-slate-600 mb-1">Nome</label><input type="text" id="member-name" class="w-full px-3 py-2 border border-slate-300 rounded-md" required></div><div class="mb-4"><label for="member-role" class="block text-sm font-medium text-slate-600 mb-1">Cargo</label><input type="text" id="member-role" class="w-full px-3 py-2 border border-slate-300 rounded-md" required></div><div class="mb-4"><label for="member-photo-url" class="block text-sm font-medium text-slate-600 mb-1">URL da Foto Atual</label><input type="text" id="member-photo-url" class="w-full px-3 py-2 border bg-slate-100 border-slate-300 rounded-md" readonly></div><div class="mb-4"><label for="member-photo-file" class="block text-sm font-medium text-slate-600 mb-1">Carregar Nova Foto</label><input type="file" id="member-photo-file" class="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-cb-blue hover:file:bg-blue-100"></div><div class="mb-6"><label for="member-reportsTo" class="block text-sm font-medium text-slate-600 mb-1">Reporta-se a</label><select id="member-reportsTo" class="w-full px-3 py-2 border border-slate-300 rounded-md"></select></div><div class="flex justify-end gap-4"><button type="button" id="cancel-member-btn" class="bg-slate-200 text-slate-800 font-bold py-2 px-5 rounded-lg">Cancelar</button><button type="submit" class="bg-cb-blue text-white font-bold py-2 px-5 rounded-lg">Salvar</button></div></form>
+            <form id="member-form"><input type="hidden" id="member-id"><div class="mb-4"><label for="member-name" class="block text-sm font-medium text-slate-600 mb-1">Nome</label><input type="text" id="member-name" class="w-full px-4 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-cb-blue outline-none" required></div><div class="mb-4"><label for="member-role" class="block text-sm font-medium text-slate-600 mb-1">Cargo</label><input type="text" id="member-role" class="w-full px-4 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-cb-blue outline-none" required></div><div class="mb-4"><label for="member-photo-url" class="block text-sm font-medium text-slate-600 mb-1">URL da Foto Atual</label><input type="text" id="member-photo-url" class="w-full px-4 py-2 border bg-slate-100 border-slate-300 rounded-md" readonly></div><div class="mb-4"><label for="member-photo-file" class="block text-sm font-medium text-slate-600 mb-1">Carregar Nova Foto</label><input type="file" id="member-photo-file" class="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-cb-blue hover:file:bg-blue-100"></div><div class="mb-6"><label for="member-reportsTo" class="block text-sm font-medium text-slate-600 mb-1">Reporta-se a</label><select id="member-reportsTo" class="w-full px-4 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-cb-blue outline-none"></select></div><div class="flex justify-end gap-4 pt-4 border-t"><button type="button" id="cancel-member-btn" class="bg-slate-200 text-slate-800 font-bold py-2 px-5 rounded-lg hover:bg-slate-300 transition-colors">Cancelar</button><button type="submit" class="bg-cb-blue text-white font-bold py-2 px-5 rounded-lg hover:opacity-90 transition-opacity">Salvar</button></div></form>
         </div>
     </div>
     <div id="confirm-modal" class="modal fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 hidden z-50">
@@ -117,8 +139,8 @@ e e pronta para ser usada online por múltiplos utilizadores. -->
             <h2 id="confirm-title" class="text-xl font-bold text-slate-800 mb-4"></h2>
             <p id="confirm-message" class="text-slate-600 mb-6"></p>
             <div class="flex justify-center gap-4">
-                <button id="confirm-cancel-btn" class="bg-slate-200 text-slate-800 font-bold py-2 px-5 rounded-lg">Cancelar</button>
-                <button id="confirm-ok-btn" class="bg-cb-red text-white font-bold py-2 px-5 rounded-lg">Confirmar</button>
+                <button id="confirm-cancel-btn" class="bg-slate-200 text-slate-800 font-bold py-2 px-5 rounded-lg hover:bg-slate-300 transition-colors">Cancelar</button>
+                <button id="confirm-ok-btn" class="bg-cb-red text-white font-bold py-2 px-5 rounded-lg hover:opacity-90 transition-opacity">Confirmar</button>
             </div>
         </div>
     </div>
@@ -126,14 +148,10 @@ e e pronta para ser usada online por múltiplos utilizadores. -->
     <!-- Firebase SDK -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-        import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-analytics.js";
         import { getFirestore, collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
         import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
         import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
-        // =====================================================================================
-        // A SUA CONFIGURAÇÃO DO FIREBASE ESTÁ AQUI
-        // =====================================================================================
         const firebaseConfig = {
             apiKey: "AIzaSyCQOnv4wNuTwDTTVkr-Mwng5qnuJY3XiAs",
             authDomain: "projetos-wms.firebaseapp.com",
@@ -143,10 +161,8 @@ e e pronta para ser usada online por múltiplos utilizadores. -->
             appId: "1:364396675615:web:99e4d8c7bb5cb8667dcb2a",
             measurementId: "G-QWBBQRFWX0"
         };
-        // =====================================================================================
 
         const app = initializeApp(firebaseConfig);
-        const analytics = getAnalytics(app);
         const db = getFirestore(app);
         const storage = getStorage(app);
         const auth = getAuth(app);
@@ -154,12 +170,16 @@ e e pronta para ser usada online por múltiplos utilizadores. -->
         let teamMembers = [];
         let projectsData = [];
         let statusChart;
+        let timelineStart, timelineEnd, totalTimelineDays;
         const timelineBody = document.getElementById('timeline-body');
         const filtersContainer = document.getElementById('filters');
-        const timelineStart = new Date("2025-07-01");
-        const timelineEnd = new Date("2025-12-31");
-        const totalTimelineDays = (timelineEnd - timelineStart) / (1000 * 60 * 60 * 24);
-        const statusStyles = { "Planejado": { text: "text-slate-600", bg: "bg-slate-200" }, "Em Andamento": { text: "text-blue-600", bg: "bg-blue-200" }, "Concluído": { text: "text-green-600", bg: "bg-green-200" }, "Atrasado": { text: "text-red-600", bg: "bg-red-200" } };
+        
+        const statusStyles = { 
+            "Planejado": { text: "text-gray-600", bg: "bg-gray-200" }, 
+            "Em Andamento": { text: "text-blue-600", bg: "bg-blue-200" }, 
+            "Concluído": { text: "text-green-600", bg: "bg-green-200" }, 
+            "Atrasado": { text: "text-red-600", bg: "bg-red-200" } 
+        };
 
         const loader = document.getElementById('loader-overlay');
         const showLoader = () => loader.classList.remove('hidden');
@@ -170,102 +190,75 @@ e e pronta para ser usada online por múltiplos utilizadores. -->
             document.getElementById('error-container').classList.remove('hidden');
         };
 
-        const refreshUI = () => { updateDashboard(); renderTimeline(); renderOrgChart(); };
-
-        const showCustomAlert = (message, title = 'Aviso') => {
-            const modal = document.getElementById('confirm-modal');
-            document.getElementById('confirm-title').textContent = title;
-            document.getElementById('confirm-message').textContent = message;
-            document.getElementById('confirm-cancel-btn').classList.add('hidden');
-            document.getElementById('confirm-ok-btn').textContent = 'OK';
-            modal.classList.remove('hidden');
-
-            const okBtn = document.getElementById('confirm-ok-btn');
-            const close = () => {
-                modal.classList.add('hidden');
-                document.getElementById('confirm-cancel-btn').classList.remove('hidden');
-                document.getElementById('confirm-ok-btn').textContent = 'Confirmar';
-                okBtn.removeEventListener('click', close);
-            };
-            okBtn.addEventListener('click', close, { once: true });
-        };
-
-        const showConfirm = (title, message) => {
-            return new Promise((resolve) => {
-                const confirmModal = document.getElementById('confirm-modal');
-                document.getElementById('confirm-title').textContent = title;
-                document.getElementById('confirm-message').textContent = message;
-                document.getElementById('confirm-cancel-btn').classList.remove('hidden');
-                document.getElementById('confirm-ok-btn').textContent = 'Confirmar';
-                confirmModal.classList.remove('hidden');
-
-                const okBtn = document.getElementById('confirm-ok-btn');
-                const cancelBtn = document.getElementById('confirm-cancel-btn');
-
-                const close = (result) => {
-                    confirmModal.classList.add('hidden');
-                    okBtn.replaceWith(okBtn.cloneNode(true));
-                    cancelBtn.replaceWith(cancelBtn.cloneNode(true));
-                    resolve(result);
-                };
-                
-                document.getElementById('confirm-ok-btn').addEventListener('click', () => close(true), { once: true });
-                document.getElementById('confirm-cancel-btn').addEventListener('click', () => close(false), { once: true });
-            });
+        function refreshUI() { 
+            calculateTimelineDates();
+            renderTimelineHeader();
+            updateDashboard(); 
+            renderTimeline(); 
+            renderOrgChart(); 
         };
         
         async function startApp() {
             try {
                 showLoader();
                 await signInAnonymously(auth);
-                console.log("Firebase: Signed in anonymously.");
-
+                
                 onSnapshot(collection(db, "members"), (snapshot) => {
-                    console.log(`Firebase: Recebidos ${snapshot.docs.length} membros da base de dados.`);
                     teamMembers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                     refreshUI();
-                    hideLoader(); // Hide loader after first successful data fetch
+                    hideLoader();
                 }, (error) => {
-                    console.error("Firebase: Erro ao escutar a coleção 'members':", error);
-                    showError("Não foi possível carregar os membros da equipa. Verifique as regras do Firestore.");
+                    showError("Não foi possível carregar os membros.");
                     hideLoader();
                 });
+
                 onSnapshot(collection(db, "projects"), (snapshot) => {
-                    console.log(`Firebase: Recebidos ${snapshot.docs.length} projetos da base de dados.`);
                     projectsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                     refreshUI();
                 }, (error) => {
-                    console.error("Firebase: Erro ao escutar a coleção 'projects':", error);
-                    showError("Não foi possível carregar os projetos. Verifique as regras do Firestore.");
+                    showError("Não foi possível carregar os projetos.");
                     hideLoader();
                 });
 
             } catch (error) {
-                console.error("Firebase: Erro durante a inicialização da aplicação:", error);
                 hideLoader();
                 if (error.code === 'auth/configuration-not-found') {
                     showError("A autenticação anónima não está ativada. Ative na consola do Firebase.");
                 } else {
-                    showError("Ocorreu um erro ao iniciar a aplicação. Verifique a consola.");
+                    showError("Ocorreu um erro ao iniciar a aplicação.");
                 }
             }
         }
-
         startApp();
         
-        // Modal & Form Elements
+        function calculateTimelineDates() {
+            const today = new Date();
+            let minDate = new Date(today.getFullYear(), today.getMonth() - 3, 1);
+            let maxDate = new Date(today.getFullYear(), today.getMonth() + 4, 0);
+
+            if (projectsData.length > 0) {
+                const allDates = projectsData.flatMap(p => [new Date(p.startDate), new Date(p.endDate)]);
+                const earliestDate = new Date(Math.min.apply(null, allDates.filter(d => !isNaN(d))));
+                const latestDate = new Date(Math.max.apply(null, allDates.filter(d => !isNaN(d))));
+
+                if (earliestDate < minDate) minDate = earliestDate;
+                if (latestDate > maxDate) maxDate = latestDate;
+            }
+            
+            timelineStart = new Date(minDate.getFullYear(), minDate.getMonth(), 1);
+            timelineEnd = new Date(maxDate.getFullYear(), maxDate.getMonth() + 1, 0);
+            totalTimelineDays = (timelineEnd - timelineStart) / (1000 * 60 * 60 * 24);
+        }
+
         const projectModal = document.getElementById('project-modal');
         const projectForm = document.getElementById('project-form');
         const memberModal = document.getElementById('member-modal');
         const memberForm = document.getElementById('member-form');
-        const progressSlider = document.getElementById('progress');
-        const progressValue = document.getElementById('progress-value');
-
-        // Modal Functions
+        
         const hideProjectModal = () => projectModal.classList.add('hidden');
         const hideMemberModal = () => memberModal.classList.add('hidden');
 
-        const showProjectModal = (project = null) => {
+        function showProjectModal(project = null) {
             projectForm.reset();
             const teamSelectionContainer = document.getElementById('team-selection');
             teamSelectionContainer.innerHTML = '';
@@ -273,25 +266,70 @@ e e pronta para ser usada online por múltiplos utilizadores. -->
                 const isChecked = project ? (project.team || []).includes(member.id) : false;
                 teamSelectionContainer.innerHTML += `<label class="flex items-center gap-2 p-2 rounded-md hover:bg-slate-100"><input type="checkbox" value="${member.id}" ${isChecked ? 'checked' : ''} class="team-member-checkbox h-4 w-4 rounded border-gray-300 text-cb-blue focus:ring-cb-blue"><span class="text-sm text-slate-700">${member.name}</span></label>`;
             });
+            document.getElementById('project-id').value = project ? project.id : '';
             if (project) {
                 document.getElementById('modal-title').textContent = 'Editar Projeto';
-                document.getElementById('project-id').value = project.id;
                 document.getElementById('project-name').value = project.name;
                 document.getElementById('start-date').value = project.startDate;
                 document.getElementById('end-date').value = project.endDate;
-                progressSlider.value = project.progress;
-                progressValue.textContent = `${project.progress}%`;
+                document.getElementById('progress').value = project.progress;
+                document.getElementById('progress-value').textContent = `${project.progress}%`;
                 document.getElementById('status').value = project.status;
             } else {
                 document.getElementById('modal-title').textContent = 'Adicionar Novo Projeto';
-                document.getElementById('project-id').value = '';
-                progressSlider.value = 0;
-                progressValue.textContent = '0%';
+                document.getElementById('progress').value = 0;
+                document.getElementById('progress-value').textContent = `0%`;
             }
             projectModal.classList.remove('hidden');
         };
-        const showMemberModal = (member = null) => {
+
+        function showConfirm(title, message) {
+            return new Promise((resolve) => {
+                const confirmModal = document.getElementById('confirm-modal');
+                document.getElementById('confirm-title').textContent = title;
+                document.getElementById('confirm-message').textContent = message;
+                document.getElementById('confirm-cancel-btn').classList.remove('hidden');
+                document.getElementById('confirm-ok-btn').textContent = 'Confirmar';
+                confirmModal.classList.remove('hidden');
+                const okBtn = document.getElementById('confirm-ok-btn');
+                const cancelBtn = document.getElementById('confirm-cancel-btn');
+                const close = (result) => {
+                    confirmModal.classList.add('hidden');
+                    okBtn.replaceWith(okBtn.cloneNode(true));
+                    cancelBtn.replaceWith(cancelBtn.cloneNode(true));
+                    resolve(result);
+                };
+                document.getElementById('confirm-ok-btn').addEventListener('click', () => close(true), { once: true });
+                document.getElementById('confirm-cancel-btn').addEventListener('click', () => close(false), { once: true });
+            });
+        };
+
+        const memberFormSubmitHandler = async (e) => {
+            e.preventDefault(); showLoader();
+            const id = document.getElementById('member-id').value;
+            const reportsTo = document.getElementById('member-reportsTo').value || null;
+            let photoURL = document.getElementById('member-photo-url').value || 'https://placehold.co/128x128/EBF4FF/00438F?text=?';
+            const photoFile = document.getElementById('member-photo-file').files[0];
+
+            if (photoFile) {
+                try {
+                    const storageRef = ref(storage, `member_photos/${Date.now()}_${photoFile.name}`);
+                    await uploadBytes(storageRef, photoFile);
+                    photoURL = await getDownloadURL(storageRef);
+                } catch (error) { showError("Não foi possível carregar a foto."); hideLoader(); return; }
+            }
+            const memberData = { name: document.getElementById('member-name').value, role: document.getElementById('member-role').value, photo: photoURL, reportsTo: reportsTo };
+            try {
+                if (id) { await updateDoc(doc(db, "members", id), memberData); } 
+                else { await addDoc(collection(db, "members"), memberData); }
+            } catch(error) { console.error("Erro ao salvar membro:", error); }
+            hideMemberModal(); hideLoader();
+        };
+
+        function showMemberModal(member = null) {
             memberForm.reset();
+            memberForm.removeEventListener('submit', memberFormSubmitHandler);
+            memberForm.addEventListener('submit', memberFormSubmitHandler, { once: true });
             const reportsToSelect = document.getElementById('member-reportsTo');
             reportsToSelect.innerHTML = '<option value="">Ninguém (Gerente)</option>';
             teamMembers.forEach(m => {
@@ -311,15 +349,14 @@ e e pronta para ser usada online por múltiplos utilizadores. -->
             memberModal.classList.remove('hidden');
         };
 
-        // Event Listeners for Forms
         projectForm.addEventListener('submit', async (e) => {
             e.preventDefault(); showLoader();
-            const selectedTeam = Array.from(document.querySelectorAll('.team-member-checkbox:checked')).map(cb => cb.value);
             const id = document.getElementById('project-id').value;
             const projectData = {
                 name: document.getElementById('project-name').value, startDate: document.getElementById('start-date').value,
-                endDate: document.getElementById('end-date').value, progress: parseInt(progressSlider.value),
-                status: document.getElementById('status').value, team: selectedTeam
+                endDate: document.getElementById('end-date').value, progress: parseInt(document.getElementById('progress').value),
+                status: document.getElementById('status').value, 
+                team: Array.from(document.querySelectorAll('.team-member-checkbox:checked')).map(cb => cb.value)
             };
             try {
                 if (id) { await updateDoc(doc(db, "projects", id), projectData); } 
@@ -327,86 +364,152 @@ e e pronta para ser usada online por múltiplos utilizadores. -->
             } catch (error) { console.error("Erro ao salvar projeto:", error); }
             hideProjectModal(); hideLoader();
         });
-        
-        memberForm.addEventListener('submit', async (e) => {
-            e.preventDefault(); showLoader();
-            const id = document.getElementById('member-id').value;
-            const reportsTo = document.getElementById('member-reportsTo').value || null;
-            let photoURL = document.getElementById('member-photo-url').value || 'https://placehold.co/128x128/EBF4FF/00438F?text=?';
-            const photoFile = document.getElementById('member-photo-file').files[0];
 
-            if (photoFile) {
-                try {
-                    const storageRef = ref(storage, `member_photos/${Date.now()}_${photoFile.name}`);
-                    await uploadBytes(storageRef, photoFile);
-                    photoURL = await getDownloadURL(storageRef);
-                } catch (error) {
-                    console.error("Erro ao carregar a foto:", error);
-                    hideLoader();
-                    showError("Não foi possível carregar a foto. Verifique as regras de segurança do Firebase Storage.");
-                    return;
-                }
-            }
-
-            const memberData = {
-                name: document.getElementById('member-name').value, role: document.getElementById('member-role').value,
-                photo: photoURL, reportsTo: reportsTo
-            };
-            try {
-                if (id) { await updateDoc(doc(db, "members", id), memberData); } 
-                else { await addDoc(collection(db, "members"), memberData); }
-            } catch(error) { console.error("Erro ao salvar membro:", error); }
-            hideMemberModal(); hideLoader();
-        });
-        
-        // Other UI Functions
-        const updateDashboard = () => {
+        function updateDashboard() {
             const total = projectsData.length;
             const andamento = projectsData.filter(p => p.status === "Em Andamento").length;
             const concluido = projectsData.filter(p => p.status === "Concluído").length;
             const atrasado = projectsData.filter(p => p.status === "Atrasado").length;
             const planejado = projectsData.filter(p => p.status === "Planejado").length;
-            document.getElementById('kpi-total').textContent = total; document.getElementById('kpi-andamento').textContent = andamento;
-            document.getElementById('kpi-concluido').textContent = concluido; document.getElementById('kpi-atrasado').textContent = atrasado;
+            document.getElementById('kpi-total').textContent = total; 
+            document.getElementById('kpi-andamento').textContent = andamento;
+            document.getElementById('kpi-concluido').textContent = concluido; 
+            document.getElementById('kpi-atrasado').textContent = atrasado;
             const chartData = {
-                labels: ['Em Andamento', 'Concluído', 'Atrasado', 'Planejado'],
-                datasets: [{ data: [andamento, concluido, atrasado, planejado], backgroundColor: ['#3b82f6', '#22c55e', '#D71921', '#e2e8f0'], borderColor: '#fff', borderWidth: 4 }]
+                labels: ['Planejado', 'Em Andamento', 'Concluído', 'Atrasado'],
+                datasets: [{ data: [planejado, andamento, concluido, atrasado], backgroundColor: ['#e2e8f0', '#3b82f6', '#22c55e', '#D71921'], borderColor: '#fff', borderWidth: 4 }]
             };
             const ctx = document.getElementById('statusChart').getContext('2d');
             if (statusChart) statusChart.destroy();
             statusChart = new Chart(ctx, { type: 'doughnut', data: chartData, options: { responsive: true, maintainAspectRatio: false, cutout: '80%', plugins: { legend: { display: false } } } });
         };
-        const renderTimeline = () => {
+
+        function renderTimelineHeader() {
+            const container = document.getElementById('timeline-header-container');
+            if (!timelineStart) return;
+            
+            const months = [];
+            let currentDate = new Date(timelineStart);
+            while(currentDate <= timelineEnd) {
+                months.push(new Date(currentDate));
+                currentDate.setMonth(currentDate.getMonth() + 1);
+            }
+
+            const monthHeaders = months.map(date => {
+                const monthName = date.toLocaleString('pt-BR', { month: 'short' }).replace('.', '').toUpperCase();
+                const year = date.getFullYear().toString().slice(-2);
+                return `<div class="text-center font-bold text-slate-600 p-2 border-r">${monthName}/${year}</div>`;
+            }).join('');
+            
+            container.innerHTML = `
+                <div class="grid p-4 border-b bg-slate-100 font-bold text-slate-600 text-sm tracking-wider" style="grid-template-columns: minmax(250px, 1fr) 3fr;">
+                    <div>PROJETO</div>
+                    <div class="grid" style="grid-template-columns: repeat(${months.length}, 1fr);">${monthHeaders}</div>
+                    <div class="text-center timeline-header-sticky-actions border-l">AÇÕES</div>
+                </div>
+            `;
+             // Adjust column definitions to match the number of columns
+            const headerGrid = container.querySelector('.grid');
+            headerGrid.style.gridTemplateColumns = 'minmax(250px, 1fr) 3fr auto';
+        };
+
+        function renderTimeline() {
             const filter = document.querySelector('.filter-btn.active').dataset.status;
             timelineBody.innerHTML = '';
             const filteredProjects = filter === "Todos" ? projectsData : projectsData.filter(p => p.status === filter);
+            
             if (filteredProjects.length === 0) {
-                timelineBody.innerHTML = `<div class="text-center p-8 text-slate-500">Nenhum projeto encontrado.</div>`; return;
+                timelineBody.innerHTML = `<div class="text-center p-8 text-slate-500">Nenhum projeto encontrado.</div>`;
+            } else {
+                filteredProjects.forEach(project => {
+                    timelineBody.appendChild(createProjectRow(project));
+                });
             }
-            filteredProjects.forEach(project => {
-                const teamHTML = (project.team || []).map(memberId => {
-                    const member = teamMembers.find(m => m.id === memberId);
-                    return member ? `<img class="inline-block h-8 w-8 rounded-full ring-2 ring-white" src="${member.photo}" alt="${member.name}" title="${member.name}">` : '';
-                }).join('');
-                const projStart = new Date(project.startDate); const projEnd = new Date(project.endDate);
-                const startOffsetDays = (projStart - timelineStart) / (1000 * 60 * 60 * 24);
-                const durationDays = (projEnd - projStart) / (1000 * 60 * 60 * 24);
-                const left = (startOffsetDays / totalTimelineDays) * 100; const width = (durationDays / totalTimelineDays) * 100;
-                const statusStyle = statusStyles[project.status] || statusStyles["Planejado"];
-                const projectEl = document.createElement('div');
-                projectEl.className = "grid grid-cols-12 items-center p-4 border-b hover:bg-slate-50/70 transition-colors duration-200";
-                projectEl.innerHTML = `<div class="col-span-3 pr-4"><p class="font-bold text-slate-800">${project.name}</p><div class="flex items-center mt-2"><span class="text-xs font-semibold py-1 px-2.5 rounded-full ${statusStyle.bg} ${statusStyle.text}">${project.status}</span><div class="flex items-center -space-x-2 ml-4">${teamHTML}</div></div></div><div class="col-span-7 h-10 relative"><div class="absolute h-8 top-1/2 -translate-y-1/2 rounded-lg bg-cb-blue opacity-20" style="left: ${left}%; width: ${width}%;"><div class="h-full rounded-lg bg-cb-blue" style="width: ${project.progress}%;"></div></div><span class="absolute top-1/2 -translate-y-1/2 text-white text-xs font-bold px-2" style="left: ${left}%;">${project.progress}%</span></div><div class="col-span-2 flex justify-center items-center gap-3"><button class="edit-btn action-btn text-slate-500 hover:text-cb-blue transition-colors" data-id="${project.id}">✏️<span class="tooltip">Editar Projeto</span></button><button class="delete-btn action-btn text-slate-500 hover:text-cb-red transition-colors" data-id="${project.id}">🗑️<span class="tooltip">Eliminar Projeto</span></button></div>`;
-                timelineBody.appendChild(projectEl);
-            });
+
+            const today = new Date();
+            if (today >= timelineStart && today <= timelineEnd) {
+                const todayOffsetDays = (today - timelineStart) / (1000 * 60 * 60 * 24);
+                const todayLeftPercentage = (todayOffsetDays / totalTimelineDays) * 100;
+
+                const marker = document.createElement('div');
+                marker.className = 'today-marker';
+                
+                // Calculate position relative to the main timeline body
+                const timelineBodyWidth = timelineBody.querySelector('.timeline-grid-area')?.offsetWidth || 1;
+                const projectColWidth = timelineBody.querySelector('.project-col-area')?.offsetWidth || 1;
+                
+                marker.style.left = `calc(${projectColWidth}px + ${todayLeftPercentage * timelineBodyWidth / 100}px)`;
+
+                timelineBody.appendChild(marker);
+            }
         };
+
+        function createProjectRow(project) {
+             const teamHTML = (project.team || []).map(memberId => {
+                const member = teamMembers.find(m => m.id === memberId);
+                return member ? `<img class="inline-block h-8 w-8 rounded-full ring-2 ring-white object-cover" src="${member.photo}" alt="${member.name}" title="${member.name}">` : '';
+            }).join('');
+            
+            const projStart = new Date(project.startDate);
+            const projEnd = new Date(project.endDate);
+            const startOffsetDays = Math.max(0, (projStart - timelineStart) / (1000 * 60 * 60 * 24));
+            const durationDays = Math.max(0, (projEnd - projStart) / (1000 * 60 * 60 * 24));
+            const left = (startOffsetDays / totalTimelineDays) * 100;
+            const width = (durationDays / totalTimelineDays) * 100;
+            const statusStyle = statusStyles[project.status] || statusStyles["Planejado"];
+            
+            const months = [];
+            let currentDate = new Date(timelineStart);
+            while(currentDate <= timelineEnd) {
+                months.push(new Date(currentDate));
+                currentDate.setMonth(currentDate.getMonth() + 1);
+            }
+
+            const projectEl = document.createElement('div');
+            projectEl.className = "grid items-center p-4 border-b hover:bg-slate-50/70 transition-colors duration-200";
+            projectEl.style.gridTemplateColumns = "minmax(250px, 1fr) 3fr auto";
+            
+            projectEl.innerHTML = `
+                <div class="pr-4 project-col-area">
+                    <p class="font-bold text-slate-800">${project.name}</p>
+                    <div class="flex items-center mt-2">
+                        <span class="text-xs font-semibold py-1 px-2.5 rounded-full ${statusStyle.bg} ${statusStyle.text}">${project.status}</span>
+                        <div class="flex items-center -space-x-2 ml-4">${teamHTML}</div>
+                    </div>
+                </div>
+                <div class="h-10 relative timeline-grid-area" style="grid-template-columns: repeat(${months.length}, 1fr);">
+                    <div class="absolute h-full w-full">
+                        <div class="absolute h-8 top-1/2 -translate-y-1/2 rounded-lg bg-slate-200 overflow-hidden" style="left: ${left}%; width: ${width}%; min-width: 2px;">
+                            <div class="h-full rounded-lg bg-cb-blue progress-bar-animated flex items-center" style="width: ${project.progress}%;">
+                                <span class="text-white text-xs font-bold px-2 whitespace-nowrap">${project.progress}%</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="flex justify-center items-center gap-3 sticky-actions px-4">
+                     <button class="edit-btn action-btn text-slate-500 hover:text-cb-blue transition-colors" data-id="${project.id}">✏️<span class="tooltip">Editar</span></button>
+                     <button class="delete-btn action-btn text-slate-500 hover:text-cb-red transition-colors" data-id="${project.id}">🗑️<span class="tooltip">Eliminar</span></button>
+                 </div>
+            `;
+            return projectEl;
+        };
+        
         const buildHierarchy = (list) => { const tree = []; const mapped = {}; list.forEach(item => { mapped[item.id] = { ...item, children: [] }; }); Object.values(mapped).forEach(item => { if (item.reportsTo && mapped[item.reportsTo]) { mapped[item.reportsTo].children.push(item); } else { tree.push(item); } }); return tree; };
-        const createNodeHTML = (node) => { let childrenHTML = ''; if (node.children && node.children.length > 0) { childrenHTML = `<ul>${node.children.map(createNodeHTML).join('')}</ul>`; } return `<li><div class="node text-center" data-id="${node.id}"><img src="${node.photo}" alt="${node.name}" class="w-16 h-16 rounded-full mx-auto mb-2 object-cover"><h4 class="font-bold text-slate-800">${node.name}</h4><p class="text-xs text-slate-500">${node.role}</p><div class="mt-2 flex justify-center gap-3"><button class="edit-member-btn text-slate-500 hover:text-cb-blue text-xs" data-id="${node.id}">✏️</button><button class="delete-member-btn text-slate-500 hover:text-cb-red text-xs" data-id="${node.id}">🗑️</button></div></div>${childrenHTML}</li>`; };
+
+        const createNodeHTML = (node) => { 
+            let childrenHTML = ''; if (node.children && node.children.length > 0) { childrenHTML = `<ul>${node.children.map(createNodeHTML).join('')}</ul>`; } 
+            return `<li><div class="node text-center" data-id="${node.id}"><img src="${node.photo}" alt="${node.name}" class="w-16 h-16 rounded-full mx-auto mb-2 object-cover"><h4 class="font-bold text-slate-800">${node.name}</h4><p class="text-xs text-slate-500">${node.role}</p><div class="mt-2 flex justify-center gap-3"><button class="edit-member-btn text-slate-500 hover:text-cb-blue text-xs" data-id="${node.id}">✏️</button><button class="delete-member-btn text-slate-500 hover:text-cb-red text-xs" data-id="${node.id}">🗑️</button></div></div>${childrenHTML}</li>`; 
+        };
+
         const renderOrgChart = () => { const hierarchy = buildHierarchy(teamMembers); const chartContainer = document.getElementById('org-chart'); chartContainer.innerHTML = `<ul>${hierarchy.map(createNodeHTML).join('')}</ul>`; };
         
-        // Other Event Listeners
-        progressSlider.addEventListener('input', (e) => { progressValue.textContent = `${e.target.value}%`; });
+        // Final Event Listeners Setup
         document.getElementById('add-project-btn').addEventListener('click', () => showProjectModal());
         document.getElementById('cancel-btn').addEventListener('click', hideProjectModal);
+        document.getElementById('add-member-btn').addEventListener('click', () => showMemberModal());
+        document.getElementById('cancel-member-btn').addEventListener('click', hideMemberModal);
+        document.getElementById('progress').addEventListener('input', (e) => { document.getElementById('progress-value').textContent = `${e.target.value}%`; });
+
         timelineBody.addEventListener('click', async (e) => {
             const editBtn = e.target.closest('.edit-btn');
             const deleteBtn = e.target.closest('.delete-btn');
@@ -415,7 +518,7 @@ e e pronta para ser usada online por múltiplos utilizadores. -->
                 showProjectModal(project);
             }
             if (deleteBtn) {
-                const confirmed = await showConfirm('Confirmar Eliminação', 'Tem a certeza que deseja eliminar este projeto?');
+                const confirmed = await showConfirm('Confirmar Eliminação', 'Tem a certeza de que deseja eliminar este projeto?');
                 if (confirmed) {
                     showLoader();
                     await deleteDoc(doc(db, "projects", deleteBtn.dataset.id));
@@ -423,8 +526,7 @@ e e pronta para ser usada online por múltiplos utilizadores. -->
                 }
             }
         });
-        document.getElementById('add-member-btn').addEventListener('click', () => showMemberModal());
-        document.getElementById('cancel-member-btn').addEventListener('click', hideMemberModal);
+
         document.getElementById('org-chart-container').addEventListener('click', async e => {
             const editBtn = e.target.closest('.edit-member-btn');
             const deleteBtn = e.target.closest('.delete-member-btn');
@@ -432,10 +534,9 @@ e e pronta para ser usada online por múltiplos utilizadores. -->
             if (deleteBtn) {
                 const memberId = deleteBtn.dataset.id;
                 if (teamMembers.some(m => m.reportsTo === memberId)) { 
-                    showCustomAlert("Não é possível eliminar um membro com subordinados. Reatribua os subordinados primeiro.");
-                    return; 
+                    alert("Não é possível eliminar um membro com subordinados."); return; 
                 }
-                const confirmed = await showConfirm('Confirmar Eliminação', 'Tem a certeza que deseja eliminar este membro?');
+                const confirmed = await showConfirm('Confirmar Eliminação', 'Tem a certeza de que deseja eliminar este membro?');
                 if (confirmed) {
                     showLoader();
                     await deleteDoc(doc(db, "members", memberId));
@@ -443,6 +544,7 @@ e e pronta para ser usada online por múltiplos utilizadores. -->
                 }
             }
         });
+        
         filtersContainer.addEventListener('click', (e) => { 
              if (e.target.tagName === 'BUTTON') { 
                 document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active')); 
